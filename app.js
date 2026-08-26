@@ -1,5 +1,5 @@
 /**
- * DocuTranslate AI - Upgraded Application Logic with Vercel Serverless & DeepL Client-side Integration
+ * DocuTranslate AI - Upgraded Application Logic with Settings Modal, PWA, & Vercel Integration
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -72,6 +72,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const downloadBtn = document.getElementById('downloadBtn');
     const toastContainer = document.getElementById('toastContainer');
 
+    // Modal Elements
+    const settingsBtn = document.getElementById('settingsBtn');
+    const settingsModal = document.getElementById('settingsModal');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const resetCacheBtn = document.getElementById('resetCacheBtn');
+    const modalActiveEngine = document.getElementById('modalActiveEngine');
+
     // --- State Variables ---
     let selectedFile = null;
     let translatedFileBlob = null;
@@ -85,6 +92,44 @@ document.addEventListener('DOMContentLoaded', () => {
     apiKey.value = savedApiKey;
     updateEngineUI(savedEngine);
 
+    // --- Settings Modal Handlers ---
+    if (settingsBtn && settingsModal) {
+        settingsBtn.addEventListener('click', () => {
+            const engineNames = {
+                vercel: 'DeepL Serverless (Vercel)',
+                deepl: 'DeepL API (Local)',
+                gemini: 'Google Gemini API',
+                demo: 'Demo Mode'
+            };
+            if (modalActiveEngine) {
+                modalActiveEngine.textContent = engineNames[apiEngine.value] || apiEngine.value;
+            }
+            settingsModal.classList.remove('hidden');
+        });
+    }
+
+    if (closeModalBtn && settingsModal) {
+        closeModalBtn.addEventListener('click', () => {
+            settingsModal.classList.add('hidden');
+        });
+    }
+
+    if (settingsModal) {
+        settingsModal.addEventListener('click', (e) => {
+            if (e.target === settingsModal) {
+                settingsModal.classList.add('hidden');
+            }
+        });
+    }
+
+    if (resetCacheBtn) {
+        resetCacheBtn.addEventListener('click', () => {
+            localStorage.clear();
+            showToast('ล้างข้อมูลการตั้งค่าในเครื่องเรียบร้อยแล้ว!', 'success');
+            setTimeout(() => window.location.reload(), 800);
+        });
+    }
+
     // --- Engine Change Listener ---
     apiEngine.addEventListener('change', (e) => {
         const engine = e.target.value;
@@ -96,7 +141,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateEngineUI(engine) {
         apiKey.style.borderColor = '';
         if (engine === 'vercel') {
-            // Vercel mode hides API Key from user interface entirely!
             apiKeyGroup.classList.add('hidden');
         } else if (engine === 'deepl') {
             apiKeyGroup.classList.remove('hidden');
@@ -262,7 +306,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: file
             });
         } catch (netErr) {
-            // Fallback to DeepL OpenXML client engine if running locally offline without Vercel backend
             console.warn('Vercel API Route unavailable, falling back to Client-side DeepL Engine:', netErr);
             const defaultKey = localStorage.getItem('docutranslate_apikey') || '6c8b7ad2-fa24-4174-ab2d-4c8af334dd58:fx';
             await translateWithDeepLOpenXML(file, defaultKey, 'https://api-free.deepl.com/v2', sourceLang.value, targetL);
@@ -611,7 +654,7 @@ ${JSON.stringify(textsToTranslate)}`;
             toast.style.opacity = '0';
             toast.style.transform = 'translateX(100%)';
             toast.style.transition = 'all 0.3s ease';
-            setTimeout(() => toast.remove(), 300);
+            setTimeout(() => toast.remove(), 5000);
         }, 5000);
     }
 });

@@ -52,7 +52,7 @@
                     <span>ติดตั้งแอป</span>
                 </button>
 
-                <button id="settingsBtn" class="btn-icon" title="ตั้งค่าระบบ">
+                <button id="settingsBtn" class="btn-icon" title="ตั้งค่าและข้อมูลระบบ">
                     <i data-lucide="settings"></i>
                 </button>
             </div>
@@ -248,6 +248,38 @@
                 </div>
             </div>
         </footer>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal-overlay hidden">
+        <div class="modal-card card">
+            <div class="modal-header">
+                <h3><i data-lucide="settings"></i> ตั้งค่า & ข้อมูลระบบ</h3>
+                <button id="closeModalBtn" class="btn-icon btn-close-modal">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-info-item">
+                    <strong>เวอร์ชันแอปพลิเคชัน:</strong>
+                    <span>DocuTranslate AI v1.0.0 (PWA Ready)</span>
+                </div>
+                <div class="modal-info-item">
+                    <strong>เครื่องมือประมวลผลปัจจุบัน:</strong>
+                    <span id="modalActiveEngine">DeepL Serverless (Vercel)</span>
+                </div>
+                <div class="modal-info-item">
+                    <strong>สถานะความปลอดภัย:</strong>
+                    <span class="status-secure"><i data-lucide="shield-check"></i> ปลอดภัย 100% (ซ่อน API Key บน Vercel)</span>
+                </div>
+                <hr class="modal-divider">
+                <div class="modal-actions">
+                    <button id="resetCacheBtn" class="btn-secondary">
+                        <i data-lucide="rotate-ccw"></i> ล้างค่าที่บันทึกไว้ในเครื่อง
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Notification Toast Container -->
