@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocuTranslate AI - ระบบแปลเอกสาร Word คงรูปแบบและสูตรคำนวณ</title>
+    <meta name="description" content="แอปพลิเคชันแปลภาษาเอกสาร Word (.docx) จากภาษาไทยเป็นภาษาอังกฤษ โดยคงรูปแบบ รูปภาพ ตาราง และสูตรคำนวณ 100%">
+    <meta name="theme-color" content="#0B0F19">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="DocuTranslate">
+
+    <!-- PWA Manifest & Icons -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="icon" type="image/png" href="icon-192.png">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- JSZip for Client-side docx parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="background-globes">
+        <div class="globe globe-1"></div>
+        <div class="globe globe-2"></div>
+        <div class="globe globe-3"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo-area">
+                <img src="icon-192.png" alt="DocuTranslate AI Logo" class="app-logo-img">
+                <div>
+                    <h1>DocuTranslate <span class="badge">AI</span></h1>
+                    <p class="subtitle">ระบบแปลเอกสาร Word คงรูปแบบภาษาเดิม & สูตรคำนวณ 100%</p>
+                </div>
+            </div>
+
+            <div class="header-actions">
+                <button id="installAppBtn" class="btn-install hidden" title="ติดตั้งแอปไว้บนมือถือหรือคอมพิวเตอร์">
+                    <i data-lucide="download-cloud"></i>
+                    <span>ติดตั้งแอป</span>
+                </button>
+
+                <button id="settingsBtn" class="btn-icon" title="ตั้งค่าระบบ">
+                    <i data-lucide="settings"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content Grid -->
+        <main class="main-content">
+            <!-- Left Panel: Configuration & Settings -->
+            <section class="card config-card">
+                <h2 class="card-title">
+                    <i data-lucide="sliders"></i> การตั้งค่าการแปล
+                </h2>
+
+                <div class="form-group">
+                    <label for="apiEngine">เครื่องมือแปลภาษา (Translation Engine)</label>
+                    <select id="apiEngine" class="form-control">
+                        <option value="vercel" selected>DeepL Serverless (แนะนำ - ซ่อน API Key ปลอดภัย 100%)</option>
+                        <option value="deepl">DeepL API (ใส่ Key เองในเครื่อง)</option>
+                        <option value="gemini">Google Gemini API</option>
+                        <option value="demo">Demo Mode (ทดสอบระบบหน้าเว็บ)</option>
+                    </select>
+                </div>
+
+                <div class="form-group hidden" id="apiKeyGroup">
+                    <div class="label-with-action">
+                        <label for="apiKey">API Key <span class="required">*</span></label>
+                        <a href="https://www.deepl.com/pro-api" id="apiKeyHelpLink" target="_blank" class="help-link">
+                            วิธีขอ API Key ฟรี <i data-lucide="external-link"></i>
+                        </a>
+                    </div>
+                    <div class="input-with-icon">
+                        <i data-lucide="key" class="input-icon"></i>
+                        <input type="password" id="apiKey" class="form-control" placeholder="วาง API Key ที่นี่">
+                        <button type="button" id="toggleKeyVisibility" class="btn-toggle-eye">
+                            <i data-lucide="eye"></i>
+                        </button>
+                    </div>
+                    <small class="help-text" id="apiKeyHint">API Key จะถูกเก็บบนเบราว์เซอร์ของคุณอย่างปลอดภัย</small>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group col">
+                        <label for="sourceLang">ต้นทาง (Source)</label>
+                        <select id="sourceLang" class="form-control">
+                            <option value="TH" selected>ภาษาไทย (Thai)</option>
+                            <option value="EN">ภาษาอังกฤษ (English)</option>
+                            <option value="AUTO">ตรวจหาอัตโนมัติ (Auto Detect)</option>
+                        </select>
+                    </div>
+                    <div class="form-group col-icon">
+                        <div class="swap-icon">
+                            <i data-lucide="arrow-right"></i>
+                        </div>
+                    </div>
+                    <div class="form-group col">
+                        <label for="targetLang">ปลายทาง (Target)</label>
+                        <select id="targetLang" class="form-control">
+                            <option value="EN-US" selected>อังกฤษ (English US)</option>
+                            <option value="EN-GB">อังกฤษ (English UK)</option>
+                            <option value="ZH">จีน (Chinese)</option>
+                            <option value="JA">ญี่ปุ่น (Japanese)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="options-group">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="preserveFormulas" checked>
+                        <span class="checkmark"></span>
+                        <span class="checkbox-label">
+                            <strong>รักษาป้อมปราการสูตรคำนวณ & สมการ (Math Equations)</strong>
+                            <small>คงสัญลักษณ์ $E=mc^2$, ตัวแปร, และตัวเลขไว้โดยไม่แปล</small>
+                        </span>
+                    </label>
+
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="preserveFormatting" checked>
+                        <span class="checkmark"></span>
+                        <span class="checkbox-label">
+                            <strong>คงสไตล์ ตัวหนา/เอียง/สี และตารางเดิมไว้</strong>
+                            <small>รักษาโครงสร้าง OpenXML ดั้งเดิมของไฟล์ Word</small>
+                        </span>
+                    </label>
+                </div>
+            </section>
+
+            <!-- Right Panel: Dropzone & Translation Status -->
+            <section class="card upload-card">
+                <h2 class="card-title">
+                    <i data-lucide="upload-cloud"></i> เลือกไฟล์เอกสาร Word
+                </h2>
+
+                <!-- Dropzone Area -->
+                <div id="dropzone" class="dropzone">
+                    <input type="file" id="fileInput" accept=".docx" class="file-input">
+                    <div class="dropzone-content" id="dropzoneContent">
+                        <div class="dropzone-icon-wrapper">
+                            <i data-lucide="file-up" class="dropzone-icon"></i>
+                        </div>
+                        <h3>ลากไฟล์ Word (.docx) มาวางที่นี่</h3>
+                        <p>หรือ <span class="browse-link">คลิกเพื่อเลือกไฟล์</span> จากคอมพิวเตอร์ของคุณ</p>
+                        <div class="file-support-tag">รองรับเฉพาะไฟล์ .docx (Microsoft Word)</div>
+                    </div>
+
+                    <!-- Selected File Info View -->
+                    <div id="fileDetails" class="file-details hidden">
+                        <div class="file-icon-box">
+                            <i data-lucide="file-spreadsheet"></i>
+                        </div>
+                        <div class="file-info-text">
+                            <h4 id="fileName">document.docx</h4>
+                            <p id="fileSize">0 KB</p>
+                        </div>
+                        <button id="removeFileBtn" class="btn-remove-file" title="ยกเลิกไฟล์นี้">
+                            <i data-lucide="x"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Action Button -->
+                <div class="action-area">
+                    <button id="translateBtn" class="btn-primary" disabled>
+                        <i data-lucide="languages"></i>
+                        <span>เริ่มแปลเอกสาร</span>
+                    </button>
+                </div>
+
+                <!-- Progress & Results State -->
+                <div id="progressSection" class="progress-section hidden">
+                    <div class="progress-header">
+                        <span id="statusMessage">กำลังเตรียมการแปลเอกสาร...</span>
+                        <span id="progressPercentage">0%</span>
+                    </div>
+                    <div class="progress-bar-bg">
+                        <div id="progressBar" class="progress-bar-fill"></div>
+                    </div>
+                    <div class="status-steps">
+                        <div class="step step-1 active" id="step1">
+                            <i data-lucide="check-circle-2"></i> อ่านไฟล์ Word
+                        </div>
+                        <div class="step step-2" id="step2">
+                            <i data-lucide="loader-2" class="spin"></i> ส่งแปลผ่าน API
+                        </div>
+                        <div class="step step-3" id="step3">
+                            <i data-lucide="clock"></i> ประกอบไฟล์ใหม่
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Success / Download Card -->
+                <div id="downloadSection" class="download-section hidden">
+                    <div class="success-banner">
+                        <div class="success-icon">
+                            <i data-lucide="check-circle"></i>
+                        </div>
+                        <div>
+                            <h3>แปลเอกสารสำเร็จแล้ว!</h3>
+                            <p>คงสไตล์เดิมและสูตรคำนวณในไฟล์เรียบร้อยแล้ว พร้อมดาวน์โหลด</p>
+                        </div>
+                    </div>
+                    <button id="downloadBtn" class="btn-success">
+                        <i data-lucide="download"></i>
+                        <span>ดาวน์โหลดไฟล์เอกสารภาษาอังกฤษ (.docx)</span>
+                    </button>
+                </div>
+            </section>
+        </main>
+
+        <!-- Recommendations & Guidance Accordion -->
+        <footer class="info-section card">
+            <h2><i data-lucide="sparkles"></i> คำแนะนำ & เคล็ดลับการแปลเอกสาร Word</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-icon"><i data-lucide="smartphone"></i></div>
+                    <div>
+                        <h4>การติดตั้งเป็นแอป (PWA App)</h4>
+                        <p>สามารถกดปุ่ม "ติดตั้งแอป" ด้านบนเพื่อกดติดตั้งไว้บนหน้าจอมือถือ (iOS/Android) หรือหน้าจอ Desktop คอมพิวเตอร์ เปิดใช้งานได้เสมือนแอปจริง</p>
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="info-icon"><i data-lucide="shield-check"></i></div>
+                    <div>
+                        <h4>ความปลอดภัยระดับสูงสุดบน Vercel</h4>
+                        <p>เมื่อใช้งานในโหมด Vercel Serverless รหัส API Key ของคุณจะถูกเก็บใน Environment Variable ของ Vercel ซ่อนพ้นสายตาจากผู้ใช้ 100%</p>
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="info-icon"><i data-lucide="check-square"></i></div>
+                    <div>
+                        <h4>ทำไม DeepL API ถึงคงสูตรได้ดีที่สุด?</h4>
+                        <p>DeepL แยกแยะสูตรออกจากตัวอักษรปกติด้วยโครงสร้าง XML Office Math (`<m:oMath>`) ทำให้สูตรไม่พังและตัวแปรคำนวณคงเดิม</p>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Notification Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="app.js"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>
