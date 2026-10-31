@@ -18,8 +18,9 @@
 3. **ตั้งค่า API Key ซ่อนไว้ใน Environment Variable**:
    - ในหน้าการตั้งค่าก่อนกด Deploy ให้ไปที่หัวข้อ **Environment Variables**
    - **Name**: `DEEPL_API_KEY`
-   - **Value**: `6c8b7ad2-fa24-4174-ab2d-4c8af334dd58:fx`
+   - **Value**: `<DeepL Auth Key ของคุณ ลงท้ายด้วย :fx ถ้าเป็นแพ็กเกจฟรี>`
    - กด **Add** แล้วกด **Deploy**
+   - ⚠️ ห้ามใส่คีย์ลงในโค้ดหรือไฟล์ README ใดๆ ให้ใส่ใน Environment Variable ของ Vercel เท่านั้น (ถ้าเคยเผลอใส่แล้ว ให้ลบคีย์เดิมที่ DeepL และสร้างใหม่)
 4. **เสร็จสิ้น!**:
    - คุณจะได้ลิงก์เว็บไซต์ออนไลน์จริง (เช่น `https://docutranslate-ai.vercel.app`) สามารถส่งให้เพื่อนลากไฟล์ Word มาแปลได้ทันที โดยที่เพื่อนไม่ต้องใส่ API Key ใดๆ เลย!
 
@@ -29,6 +30,13 @@
 
 - `index.html` : หน้า UI หลัก (Dark Glassmorphism)
 - `style.css` : สไตล์การจัดวางและ Grid กันการบีบอัด
-- `app.js` : ตัวจัดการหน้าบ้าน เชื่อมต่อ Vercel API และระบบสำรอง
-- `api/translate.js` : Vercel Serverless Function ประมวลผลเอกสารและซ่อน API Key
-- `package.json` : ไฟล์ระบุ Dependency (`jszip`) สำหรับ Vercel
+- `app.js` : ตัวจัดการหน้าบ้าน เลือกเครื่องมือแปล (Vercel / DeepL Key เอง / Gemini / Demo)
+- `docx-core.js` : แกะและประกอบ .docx แปลทีละย่อหน้า ครอบคลุมเนื้อหา, header/footer, เชิงอรรถ/ท้ายเรื่อง, คอมเมนต์, SmartArt/กราฟ และคงสูตร (OMML)
+- `api/translate.js` : Vercel Serverless Function รับ "ข้อความ" เป็น JSON แล้วส่งต่อให้ DeepL โดยซ่อน API Key (ไม่รับไฟล์ จึงไม่ติดเพดานขนาด 4.5 MB ของ Vercel)
+- `vercel.json` : ตั้งเวลาสูงสุดของ Function
+- `package.json` / `test/` : ชุดทดสอบ `npm test` (ใช้ Node 20+)
+
+## 🔒 หมายเหตุด้านความปลอดภัย
+
+- endpoint `/api/translate` เปิดให้ทุกคนที่รู้ URL เรียกได้ และจะใช้โควตา DeepL ของคุณ ถ้าจะเปิดให้คนทั่วไปใช้ ควรตั้ง usage limit ใน DeepL และพิจารณาเพิ่ม rate limit หรือรหัสผ่านหน้าเว็บ
+- โหมด "DeepL (ใส่ Key เอง)" ส่งคีย์ของผู้ใช้ผ่าน `/api/translate` ไปยัง DeepL โดยไม่เก็บ เพราะ DeepL ไม่อนุญาตให้เบราว์เซอร์เรียกตรง (CORS)

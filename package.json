@@ -1,12 +1,13 @@
 {
   "name": "docutranslate-ai",
-  "version": "1.0.0",
+  "version": "1.1.0",
+  "private": true,
   "description": "Word Document Translation Web App with Formula & Formatting Preservation",
-  "main": "api/translate.js",
   "scripts": {
-    "start": "node api/translate.js"
+    "test": "node --test test/*.test.js"
   },
-  "dependencies": {
+  "devDependencies": {
+    "@xmldom/xmldom": "^0.8.10",
     "jszip": "^3.10.1"
   }
 }

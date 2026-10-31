@@ -1,9 +1,10 @@
 // Service Worker for DocuTranslate AI PWA
-const CACHE_NAME = 'docutranslate-v1';
+const CACHE_NAME = 'docutranslate-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/style.css',
+  '/docx-core.js',
   '/app.js',
   '/manifest.json',
   '/icon-192.png',

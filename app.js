@@ -86,7 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Restore Saved Settings ---
     const savedEngine = localStorage.getItem('docutranslate_engine') || 'vercel';
-    const savedApiKey = localStorage.getItem('docutranslate_apikey') || '6c8b7ad2-fa24-4174-ab2d-4c8af334dd58:fx';
+    const savedApiKey = localStorage.getItem('docutranslate_apikey') || '';
     
     apiEngine.value = savedEngine;
     apiKey.value = savedApiKey;
@@ -146,8 +146,8 @@ document.addEventListener('DOMContentLoaded', () => {
             apiKeyGroup.classList.remove('hidden');
             apiKeyHelpLink.href = 'https://www.deepl.com/pro-api';
             apiKeyHelpLink.classList.remove('hidden');
-            apiKeyHint.textContent = 'ใส่ DeepL Auth Key (ลงท้ายด้วย :fx สำหรับแพ็กเกจฟรี)';
-            apiKey.placeholder = 'เช่น 6c8b7ad2-fa24-4174-ab2d-4c8af334dd58:fx';
+            apiKeyHint.textContent = 'ใส่ DeepL Auth Key (ลงท้ายด้วย :fx สำหรับแพ็กเกจฟรี) — ส่งผ่านเซิร์ฟเวอร์ของเว็บนี้ไปยัง DeepL เท่านั้น ไม่ถูกบันทึกฝั่งเซิร์ฟเวอร์';
+            apiKey.placeholder = 'เช่น xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx:fx';
         } else if (engine === 'gemini') {
             apiKeyGroup.classList.remove('hidden');
             apiKeyHelpLink.href = 'https://aistudio.google.com/app/apikey';
@@ -273,7 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             if (engine === 'vercel') {
-                await translateWithVercelServerless(selectedFile, tgt);
+                await translateWithVercelServerless(selectedFile, src, tgt);
             } else if (engine === 'deepl') {
                 await translateWithDeepL(selectedFile, key, src, tgt);
             } else if (engine === 'gemini') {
@@ -289,247 +289,159 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- Vercel Serverless Function Engine ---
-    async function translateWithVercelServerless(file, targetL) {
-        updateProgress(35, 'กำลังส่งไฟล์ไปประมวลผลบน Vercel Serverless (ซ่อน API Key)...', 2);
+    // --- Translation Engines ---
+    // ทุกเอนจินใช้ DocxCore.translateDocx (แปลทีละย่อหน้า + header/footer/footnotes)
+    // ต่างกันแค่ "ตัวแปลข้อความ" (translate function)
 
-        const preserveFormulas = document.getElementById('preserveFormulas').checked;
-
-        let res;
-        try {
-            res = await fetch('/api/translate', {
-                method: 'POST',
-                headers: {
-                    'x-target-lang': targetL,
-                    'x-preserve-formulas': preserveFormulas ? 'true' : 'false'
-                },
-                body: file
-            });
-        } catch (netErr) {
-            console.warn('Vercel API Route unavailable, falling back to Client-side DeepL Engine:', netErr);
-            const defaultKey = localStorage.getItem('docutranslate_apikey') || '6c8b7ad2-fa24-4174-ab2d-4c8af334dd58:fx';
-            await translateWithDeepLOpenXML(file, defaultKey, 'https://api-free.deepl.com/v2', sourceLang.value, targetL);
-            return;
-        }
-
-        if (!res.ok) {
-            const errData = await res.json().catch(() => ({}));
-            throw new Error(errData.error || `Vercel Server ตอบกลับด้วยรหัสข้อผิดพลาด HTTP ${res.status}`);
-        }
-
-        updateProgress(85, 'แปลเอกสารเสร็จเรียบร้อย! กำลังรับไฟล์ผลลัพธ์...', 3);
-        translatedFileBlob = await res.blob();
-        translatedFileName = getTranslatedFileName(file.name, targetL);
-        finishTranslation();
+    function getOptions() {
+        return {
+            preserveFormulas: document.getElementById('preserveFormulas').checked,
+            preserveFormatting: document.getElementById('preserveFormatting').checked
+        };
     }
 
-    // --- DeepL API Integration ---
-    async function translateWithDeepL(file, key, sourceL, targetL) {
-        updateProgress(20, 'กำลังเชื่อมต่อและประมวลผลกับ DeepL API...', 2);
-        
-        const baseUrl = key.endsWith(':fx') 
-            ? 'https://api-free.deepl.com/v2' 
-            : 'https://api.deepl.com/v2';
+    async function translateDocument(file, translator, targetL, engineLabel) {
+        const zip = await JSZip.loadAsync(file).catch(() => {
+            throw new Error('เปิดไฟล์ไม่ได้ (ไฟล์เสียหายหรือไม่ใช่ .docx ที่ถูกต้อง)');
+        });
 
-        updateProgress(35, 'กำลังเปิดใช้งาน DeepL Client XML Engine (คงรูปแบบและสูตร 100%)...', 2);
-        await translateWithDeepLOpenXML(file, key, baseUrl, sourceL, targetL);
-    }
+        const opts = getOptions();
+        updateProgress(20, 'กำลังวิเคราะห์ย่อหน้าในเอกสาร...', 1);
 
-    async function translateWithDeepLOpenXML(file, key, baseUrl, sourceL, targetL) {
-        const zip = await JSZip.loadAsync(file);
-        const docXmlFile = zip.file('word/document.xml');
-        if (!docXmlFile) throw new Error('ไม่พบโครงสร้าง word/document.xml ในไฟล์เอกสารนี้');
-
-        const xmlString = await docXmlFile.async('text');
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
-
-        const preserveFormulas = document.getElementById('preserveFormulas').checked;
-        const textNodes = [];
-        const allWTextNodes = xmlDoc.getElementsByTagName('w:t');
-
-        for (let i = 0; i < allWTextNodes.length; i++) {
-            const node = allWTextNodes[i];
-            const textContent = node.textContent;
-            if (textContent && textContent.trim().length > 0) {
-                if (preserveFormulas && isInsideMathNode(node)) {
-                    continue;
+        const stats = await DocxCore.translateDocx(zip, {
+            translate: translator,
+            preserveFormulas: opts.preserveFormulas,
+            preserveFormatting: opts.preserveFormatting,
+            onProgress: ({ phase, done, total }) => {
+                if (phase === 'translate') {
+                    const pct = 25 + Math.round((total ? done / total : 1) * 60);
+                    updateProgress(pct, `${engineLabel} แปลแล้ว ${done} / ${total} ข้อความ...`, 2);
+                } else if (phase === 'write') {
+                    updateProgress(92, 'กำลังประกอบโครงสร้างเอกสาร Word กลับเป็น .docx...', 3);
                 }
-                textNodes.push(node);
             }
-        }
-
-        if (textNodes.length === 0) {
-            throw new Error('ไม่พบข้อความภาษาไทยที่ต้องแปลในไฟล์เอกสารนี้');
-        }
-
-        updateProgress(50, `พบข้อความ ${textNodes.length} ย่อหน้า กำลังส่งแปลด้วย DeepL API...`, 2);
-
-        const batchSize = 10;
-        for (let i = 0; i < textNodes.length; i += batchSize) {
-            const batch = textNodes.slice(i, i + batchSize);
-            
-            const params = new URLSearchParams();
-            params.append('auth_key', key);
-            params.append('target_lang', targetL.split('-')[0].toUpperCase());
-            if (sourceL !== 'AUTO') {
-                params.append('source_lang', sourceL.toUpperCase());
-            }
-            batch.forEach(n => params.append('text', n.textContent));
-
-            let res;
-            try {
-                res = await fetch(`${baseUrl}/translate`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: params
-                });
-            } catch (netErr) {
-                throw new Error('ไม่สามารถเชื่อมต่อกับ DeepL API ได้ (โปรดตรวจสอบอินเทอร์เน็ต)');
-            }
-
-            if (!res.ok) {
-                if (res.status === 403 || res.status === 401) {
-                    throw new Error('DeepL API Key ไม่ถูกต้อง หรือโควตาแปลฟรีของคุณหมดแล้ว');
-                }
-                throw new Error(`DeepL API ตอบกลับด้วยรหัส HTTP ${res.status}`);
-            }
-
-            const data = await res.json();
-            if (data.translations && data.translations.length === batch.length) {
-                batch.forEach((node, idx) => {
-                    if (data.translations[idx]?.text) {
-                        node.textContent = data.translations[idx].text;
-                    }
-                });
-            }
-
-            const currentPercent = Math.min(88, 50 + Math.round(((i + batchSize) / textNodes.length) * 35));
-            updateProgress(currentPercent, `DeepL แปลแล้ว ${Math.min(i + batchSize, textNodes.length)} / ${textNodes.length} ย่อหน้า...`, 2);
-        }
-
-        updateProgress(92, 'กำลังประกอบโครงสร้างเอกสาร Word กลับเป็น .docx...', 3);
-        const serializer = new XMLSerializer();
-        const newXmlString = serializer.serializeToString(xmlDoc);
-        zip.file('word/document.xml', newXmlString);
+        });
+        console.info('DocxCore stats:', stats);
 
         translatedFileBlob = await zip.generateAsync({
             type: 'blob',
-            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            compression: 'DEFLATE'
         });
         translatedFileName = getTranslatedFileName(file.name, targetL);
         finishTranslation();
     }
 
-    // --- Client-side JSZip + Gemini API Integration ---
-    async function translateWithGemini(file, key, sourceL, targetL) {
-        updateProgress(20, 'กำลังอ่านแกะไฟล์ Word XML ด้วย JSZip...', 1);
+    // ส่งข้อความไป /api/translate (Vercel) — คีย์อยู่ฝั่ง server; ถ้าส่ง userKey จะใช้คีย์ของผู้ใช้แทน
+    function makeServerTranslator(sourceL, targetL, userKey) {
+        return async (texts, { xml }) => {
+            const headers = { 'Content-Type': 'application/json' };
+            if (userKey) headers['x-user-api-key'] = userKey;
+            const body = JSON.stringify({
+                texts,
+                targetLang: targetL,
+                sourceLang: sourceL === 'AUTO' ? undefined : sourceL,
+                xml
+            });
 
-        const zip = await JSZip.loadAsync(file);
-        const docXmlFile = zip.file('word/document.xml');
-
-        if (!docXmlFile) {
-            throw new Error('ไม่พบไฟล์โครงสร้าง word/document.xml ในเอกสารนี้');
-        }
-
-        const xmlString = await docXmlFile.async('text');
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
-
-        const preserveFormulas = document.getElementById('preserveFormulas').checked;
-        const textNodes = [];
-        const allWTextNodes = xmlDoc.getElementsByTagName('w:t');
-
-        for (let i = 0; i < allWTextNodes.length; i++) {
-            const node = allWTextNodes[i];
-            const textContent = node.textContent;
-            
-            if (textContent && textContent.trim().length > 0) {
-                if (preserveFormulas && isInsideMathNode(node)) {
+            let lastError;
+            for (let attempt = 0; attempt < 4; attempt++) {
+                if (attempt > 0) await sleep(1000 * attempt);
+                let res;
+                try {
+                    res = await fetch('/api/translate', { method: 'POST', headers, body });
+                } catch (netErr) {
+                    lastError = new Error('เชื่อมต่อเซิร์ฟเวอร์แปลภาษาไม่ได้ (โปรดตรวจสอบอินเทอร์เน็ต หรือเปิดผ่านเว็บที่ deploy บน Vercel)');
                     continue;
                 }
-                textNodes.push(node);
+                if (res.ok) {
+                    const data = await res.json();
+                    return data.translations;
+                }
+                const errData = await res.json().catch(() => ({}));
+                lastError = new Error(errData.error || `เซิร์ฟเวอร์ตอบกลับด้วยรหัสข้อผิดพลาด HTTP ${res.status}`);
+                if (![429, 502, 503, 504].includes(res.status) || res.status === 502 && /Key|โควตา/.test(lastError.message)) {
+                    throw lastError; // ไม่ควรลองซ้ำ (เช่น คีย์ผิด/โควตาหมด)
+                }
             }
-        }
+            throw lastError;
+        };
+    }
 
-        if (textNodes.length === 0) {
-            throw new Error('ไม่พบข้อความภาษาไทยที่ต้องแปลในไฟล์เอกสารนี้');
-        }
+    async function translateWithVercelServerless(file, sourceL, targetL) {
+        updateProgress(20, 'กำลังวิเคราะห์เอกสารและส่งข้อความไปแปลผ่าน Vercel Serverless (ซ่อน API Key)...', 2);
+        await translateDocument(file, makeServerTranslator(sourceL, targetL, null), targetL, 'DeepL');
+    }
 
-        updateProgress(40, `พบข้อความ ${textNodes.length} ย่อหน้า กำลังส่งแปลด้วย Gemini API...`, 2);
+    // DeepL ไม่เปิด CORS ให้เบราว์เซอร์เรียกตรง จึงส่งผ่าน /api/translate โดยแนบคีย์ของผู้ใช้ (ไม่ถูกเก็บฝั่ง server)
+    async function translateWithDeepL(file, key, sourceL, targetL) {
+        updateProgress(20, 'กำลังวิเคราะห์เอกสารและส่งแปลด้วย DeepL Key ของคุณ...', 2);
+        await translateDocument(file, makeServerTranslator(sourceL, targetL, key), targetL, 'DeepL');
+    }
 
-        const batchSize = 10;
-        for (let i = 0; i < textNodes.length; i += batchSize) {
-            const batch = textNodes.slice(i, i + batchSize);
-            const textsToTranslate = batch.map(n => n.textContent);
+    // --- Gemini (เรียกจากเบราว์เซอร์ตรง) ---
+    async function translateWithGemini(file, key, sourceL, targetL) {
+        const langNames = { 'EN-US': 'American English', 'EN-GB': 'British English', ZH: 'Chinese', JA: 'Japanese' };
+        const targetName = langNames[targetL] || targetL;
+        const sourceName = sourceL === 'AUTO' ? 'the source language' : sourceL;
 
-            const prompt = `Translate the following array of Thai strings to ${targetL}. 
-Keep any mathematical variables (e.g. x, y, F, m), numbers, equations, and technical symbols intact.
-Return ONLY a valid JSON array of translated strings corresponding 1-to-1:
-${JSON.stringify(textsToTranslate)}`;
+        async function callGemini(texts, xml) {
+            const prompt = `Translate each string in the JSON array below from ${sourceName} to ${targetName}.
+Rules:
+- Return ONLY a JSON array of strings with exactly ${texts.length} items, in the same order.
+- Keep numbers, math variables (x, y, F, m), equations, units and technical symbols unchanged.
+${xml ? '- Strings are XML-escaped (&amp; &lt; &gt;): keep that escaping. Keep every tag like <x i="0">…</x> exactly, with the same count and the same i values; translate only the text inside them.\n' : ''}
+${JSON.stringify(texts)}`;
 
             let res;
             try {
-                res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
+                res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
                     body: JSON.stringify({
-                        contents: [{ parts: [{ text: prompt }] }]
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: { responseMimeType: 'application/json', temperature: 0.2 }
                     })
                 });
             } catch (netErr) {
                 throw new Error('ไม่สามารถเชื่อมต่อกับ Gemini API ได้');
             }
-
             if (!res.ok) {
-                throw new Error(`Gemini API Key ไม่ถูกต้อง หรือมีข้อผิดพลาด status: ${res.status}`);
+                if (res.status === 400 || res.status === 403) throw new Error('Gemini API Key ไม่ถูกต้องหรือไม่มีสิทธิ์ใช้งาน');
+                if (res.status === 429) throw new Error('Gemini API รับคำขอถี่เกินไปหรือโควตาหมด');
+                throw new Error(`Gemini API ตอบกลับด้วยรหัส HTTP ${res.status}`);
             }
-
             const resData = await res.json();
             const responseText = resData.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            
             const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-            if (jsonMatch) {
-                try {
-                    const translatedArray = JSON.parse(jsonMatch[0]);
-                    batch.forEach((node, idx) => {
-                        if (translatedArray[idx]) {
-                            node.textContent = translatedArray[idx];
-                        }
-                    });
-                } catch (e) {
-                    console.warn('JSON parse fallback');
-                }
+            if (!jsonMatch) return null;
+            try {
+                const arr = JSON.parse(jsonMatch[0]);
+                return Array.isArray(arr) && arr.length === texts.length && arr.every(s => typeof s === 'string') ? arr : null;
+            } catch (e) {
+                return null;
             }
-
-            const currentPercent = Math.min(85, 40 + Math.round(((i + batchSize) / textNodes.length) * 45));
-            updateProgress(currentPercent, `แปลแล้ว ${Math.min(i + batchSize, textNodes.length)} / ${textNodes.length} ย่อหน้า...`, 2);
         }
 
-        updateProgress(90, 'กำลังประกอบไฟล์ Word กลับเป็น .docx...', 3);
+        const translator = async (texts, { xml }) => {
+            const arr = await callGemini(texts, xml);
+            if (arr) return arr;
+            // ตอบกลับไม่ครบ/ไม่ใช่ JSON: ลองแปลทีละข้อความ แทนการข้ามไปเงียบๆ
+            const out = [];
+            for (const t of texts) {
+                const one = await callGemini([t], xml);
+                if (!one) throw new Error('Gemini ตอบกลับรูปแบบที่อ่านไม่ได้ กรุณาลองใหม่หรือเปลี่ยนเครื่องมือแปล');
+                out.push(one[0]);
+            }
+            return out;
+        };
 
-        const serializer = new XMLSerializer();
-        const newXmlString = serializer.serializeToString(xmlDoc);
-        zip.file('word/document.xml', newXmlString);
-
-        translatedFileBlob = await zip.generateAsync({ 
-            type: 'blob', 
-            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' 
-        });
-        translatedFileName = getTranslatedFileName(file.name, targetL);
-
-        finishTranslation();
+        updateProgress(20, 'กำลังวิเคราะห์เอกสารและส่งแปลด้วย Gemini API...', 2);
+        await translateDocument(file, translator, targetL, 'Gemini');
     }
 
-    function isInsideMathNode(node) {
-        let parent = node.parentNode;
-        while (parent) {
-            if (parent.tagName === 'm:oMath' || parent.tagName === 'm:oMathPara') {
-                return true;
-            }
-            parent = parent.parentNode;
-        }
-        return false;
+    function sleep(ms) {
+        return new Promise(r => setTimeout(r, ms));
     }
 
     // --- Demo Mode Simulation ---
@@ -654,7 +566,7 @@ ${JSON.stringify(textsToTranslate)}`;
             toast.style.opacity = '0';
             toast.style.transform = 'translateX(100%)';
             toast.style.transition = 'all 0.3s ease';
-            setTimeout(() => toast.remove(), 5000);
+            setTimeout(() => toast.remove(), 300);
         }, 5000);
     }
 });

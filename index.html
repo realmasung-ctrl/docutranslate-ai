@@ -243,7 +243,7 @@
                     <div class="info-icon"><i data-lucide="check-square"></i></div>
                     <div>
                         <h4>ทำไม DeepL API ถึงคงสูตรได้ดีที่สุด?</h4>
-                        <p>DeepL แยกแยะสูตรออกจากตัวอักษรปกติด้วยโครงสร้าง XML Office Math (`<m:oMath>`) ทำให้สูตรไม่พังและตัวแปรคำนวณคงเดิม</p>
+                        <p>ระบบแยกสูตร Office Math (&lt;m:oMath&gt;) ออกจากข้อความปกติก่อนส่งแปล แปลทีละย่อหน้าเพื่อให้ได้ประโยคครบ และคงตัวหนา/สีในย่อหน้าเดิมให้มากที่สุด</p>
                     </div>
                 </div>
             </div>
@@ -285,6 +285,7 @@
     <!-- Notification Toast Container -->
     <div id="toastContainer" class="toast-container"></div>
 
+    <script src="docx-core.js"></script>
     <script src="app.js"></script>
     <script>
         lucide.createIcons();
