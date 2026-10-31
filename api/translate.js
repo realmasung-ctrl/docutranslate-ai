@@ -15,7 +15,7 @@ export default async function handler(req, res) {
     }
 
     // Retrieve hidden API Key from Vercel Environment Variables
-    const apiKey = process.env.DEEPL_API_KEY || '6c8b7ad2-fa24-4174-ab2d-4c8af334dd58:fx';
+    const apiKey = process.env.DEEPL_API_KEY || 'ba1e9e02-94a1-40e6-b792-403f8b37baec:fx';
     const targetLang = req.headers['x-target-lang'] || 'EN';
     const preserveFormulas = req.headers['x-preserve-formulas'] !== 'false';
 
